@@ -1,0 +1,180 @@
+app.js
+
+const express = require("express");
+const { open } = require("sqlite");
+const sqlite3 = require("sqlite3");
+const path = require("path");
+
+const app = express();
+app.use(express.json());
+const dbPath = path.join(__dirname, "moviesData.db");
+
+let db = null;
+const initializedDbAndServer = async () => {
+  try {
+    db = await open({
+      filename: dbPath,
+      driver: sqlite3.Database,
+    });
+    app.listen(3000, () => {
+      console.log("server is running at http://localhost:3000/");
+    });
+  } catch (error) {
+    console.log(`Db Error: ${error.message}`);
+    process.exit(1);
+  }
+};
+initializedDbAndServer();
+
+// get into camel case
+
+const getDbDataIntoCamelCase = (movie) => {
+  return {
+    movieName: movie.movie_name,
+  };
+};
+
+//get All Movies
+app.get("/movies/", async (request, response) => {
+  const getMoviesQuery = `
+    select movie_name from movie`;
+  const result = await db.all(getMoviesQuery);
+  response.send(result.map((eachMovie) => getDbDataIntoCamelCase(eachMovie)));
+});
+
+// posting new movie API
+
+app.post("/movies/", async (request, response) => {
+  const movieData = request.body;
+  const { directorId, movieName, leadActor } = movieData;
+  const getQuery = `
+  insert into 
+  movie
+  (director_id, movie_name, lead_actor)
+  values
+  ( ${directorId}, '${movieName}', '${leadActor}')`;
+  const result = await db.run(getQuery);
+  const movieId = result.lastID;
+  response.send("Movie Successfully Added");
+});
+//
+
+let convertDetailsFromSnakeCasetoCamelCase = (eachMovie) => {
+  return {
+    movieId: eachMovie.movie_id,
+    directorId: eachMovie.director_id,
+    movieName: eachMovie.movie_name,
+    leadActor: eachMovie.lead_actor,
+  };
+};
+//Returns a movie based on the movie ID
+
+app.get("/movies/:movieId/", async (request, response) => {
+  const { movieId } = request.params;
+  let newQuery = `
+  select 
+  *
+  from movie where movie_id = ${movieId};`;
+  const resultantMovie = await db.get(newQuery);
+
+  const final = convertDetailsFromSnakeCasetoCamelCase(resultantMovie);
+  console.log(final);
+  response.send(final);
+});
+
+// Upload API
+app.put("/movies/:movieId/", async (request, response) => {
+  const { movieId } = request.params;
+  const { directorId, movieName, leadActor } = request.body;
+  const getQuery = `
+    update 
+  movie 
+  set 
+  director_id = ${directorId}, movie_name = "${movieName}",
+  lead_actor = "${leadActor}" where movie_id = ${movieId};
+  `;
+  const result = await db.run(getQuery);
+  console.log(result);
+  response.send("Movie Details Updated");
+});
+
+// DELETE API
+
+app.delete("/movies/:movieId/", async (request, response) => {
+  const { movieId } = request.params;
+  const getQuery = `
+  delete from movie where movie_id = ${movieId}; `;
+  const result = await db.run(getQuery);
+  response.send("Movie Removed");
+});
+
+// Conversion for List of director
+
+const conversionforDirector = (each) => {
+  return {
+    directorId: each.director_id,
+    directorName: each.director_name,
+  };
+};
+
+// List of director API
+
+app.get("/directors/", async (request, response) => {
+  const getQuery = `
+    select * from director`;
+  const result = await db.all(getQuery);
+  response.send(result.map((each) => conversionforDirector(each)));
+});
+// getting ready response for api 7
+const conversionForMovieListOfDir = (each) => {
+  return {
+    movieName: each.movie_name,
+  };
+};
+// Returns a list of all movie names directed by a specific director API
+
+app.get("/directors/:directorId/movies/", async (request, response) => {
+  const { directorId } = request.params;
+  const getQuery = `
+  select movie_name from movie where director_id = ${directorId}`;
+  const result = await db.all(getQuery);
+  response.send(result.map((each) => conversionForMovieListOfDir(each)));
+});
+
+module.exports = app;
+
+###################
+moviesData.http
+
+GET http://localhost:3000
+###
+GET http://localhost:3000/movies/
+###
+POST http://localhost:3000/movies/
+Content-Type: application/json
+
+{
+  "directorId": 6,
+  "movieName": "Jurassic Park",
+  "leadActor": "Jeff Goldblum"
+}
+###
+GET http://localhost:3000/movies/55/
+
+###
+PUT http://localhost:3000/movies/46/
+Content-Type: application/json
+
+{
+    "directorId": 1,
+    "movieName": "Thor",
+    "leadActor": "Christopher Hemsworth"
+}
+
+###
+DELETE http://localhost:3000/movies/46/
+###
+GET http://localhost:3000/directors/
+
+###
+GET http://localhost:3000/directors/2/movies/
