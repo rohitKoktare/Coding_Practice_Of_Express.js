@@ -1,0 +1,149 @@
+const express = require("express");
+const path = require("path");
+
+const { open } = require("sqlite");
+const sqlite3 = require("sqlite3");
+
+const app = express();
+app.use(express.json());
+const dbPath = path.join(__dirname, "cricketTeam.db");
+
+let db = null;
+const initializeDBAndServer = async () => {
+  try {
+    db = await open({
+      filename: dbPath,
+      driver: sqlite3.Database,
+    });
+    app.listen(3000, () => {
+      console.log("Server is Running at http://localhost:3000/");
+    });
+  } catch (e) {
+    console.log("Db Error: ${e.message}");
+    process.exit(1);
+  }
+};
+initializeDBAndServer();
+//
+const getdbresultAndConvertToCamelCase = (player) => {
+  return {
+    playerId: player.player_id,
+    playerName: player.player_name,
+    jerseyNumber: player.jersey_number,
+    role: player.role,
+  };
+};
+//
+// Get Table api
+
+app.get("/players/", async (request, response) => {
+  const getPlayerQuery = `
+        SELECT *
+        FROM cricket_team
+         ;`;
+  const player = await db.all(getPlayerQuery);
+  response.send(player.map((each) => getdbresultAndConvertToCamelCase(each)));
+});
+//
+const snake_case_to_camelCase = (result) => {
+  return {
+    playerId: result.player_id,
+    playerName: result.player_name,
+    jerseyNumber: result.jersey_number,
+    role: result.role,
+  };
+};
+//
+// POST PLAYER INFO API
+
+app.post("/players/", async (request, response) => {
+  const bookDetails = request.body;
+  const { playerName, jerseyNumber, role } = bookDetails;
+  const addBookQuery = `
+    INSERT INTO
+      cricket_team (
+        player_name,
+        jersey_number,
+        role)
+    VALUES
+      (
+        '${playerName}',
+        ${jerseyNumber},
+        '${role}'
+      );`;
+  const dbResponse = await db.run(addBookQuery);
+  console.log(dbResponse);
+  const bookId = dbResponse.lastID;
+  response.send("Player Added to Team");
+});
+
+// Returns a player based on a player ID
+
+app.get("/players/:playerId", async (request, response) => {
+  const { playerId } = request.params;
+  const getPlayerQuery = `
+    select * 
+    from cricket_team
+    where
+    player_id = ${playerId}; `;
+  const result = await db.get(getPlayerQuery);
+  response.send(snake_case_to_camelCase(result));
+  console.log(result);
+});
+
+//Updates the details of a player in the team (database) based on the player ID
+
+app.put("/players/:playerId", async (request, response) => {
+  const { playerId } = request.params;
+  const newData = request.body;
+  const { playerName, jerseyNumber, role } = newData;
+  const updateQuery = `update 
+    cricket_team 
+    set 
+    player_name = "${playerName}",
+    jersey_number = ${jerseyNumber},
+    role = "${role}" where player_id = ${playerId};`;
+  await db.run(updateQuery);
+  response.send("Player Details Updated");
+});
+
+//DELETE API
+app.delete("/players/:playerId", async (request, response) => {
+  const { playerId } = request.params;
+  const playerQuery = `
+  delete from cricket_team
+  where player_id = ${playerId}`;
+  await db.run(playerQuery);
+  response.send("Player Removed");
+});
+
+module.exports = app;
+
+
+
+////
+GET http://localhost:3000/players/
+
+###
+POST http://localhost:3000/players/ 
+Content-Type: application/json
+
+{
+  "playerName": "Rohit Koktare",
+  "jerseyNumber": 72,
+  "role": "Batsman"
+}
+###
+GET http://localhost:3000/players/5/
+
+###
+PUT http://localhost:3000/players/2/
+Content-Type: application/json
+
+{
+    "playerName": "Maneesh",
+    "jerseyNumber": 54,
+    "role": "All-rounder"
+}
+###
+DELETE http://localhost:3000/players/1
