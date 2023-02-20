@@ -24,7 +24,6 @@ const initializedDbAndServer = async () => {
   }
 };
 initializedDbAndServer();
-
 // API 1
 
 app.post("/register", async (request, response) => {
@@ -53,9 +52,54 @@ app.post("/register", async (request, response) => {
   }
 });
 
+app.post("/login", async (request, response) => {
+  const { username, password } = request.body;
+  console.log(username, password);
+  const userNameSearchQuery = `select * from user where 
+    username = "${username}";`;
+  const result = await db.get(userNameSearchQuery);
 
+  if (result === undefined) {
+    response.status(400);
+    response.send("Invalid user");
+  } else {
+    const isCorrectPass = await bcrypt.compare(password, result.password);
+    if (isCorrectPass) {
+      response.status(200);
+      response.send("Login success!");
+    } else {
+      response.status(400);
+      response.send("Invalid password");
+    }
+  }
+  console.log(result);
+});
 
-#################
+//API 3
+app.put("/change-password", async (request, response) => {
+  const { username, oldPassword, newPassword } = request.body;
+  const getData = `select * from user where username = "${username}";`;
+  const userData = await db.get(getData);
+  const isPassCorrect = await bcrypt.compare(oldPassword, userData.password);
+  if (isPassCorrect) {
+    if (newPassword.length < 5) {
+      response.status(400);
+      response.send("Password is too short");
+    } else {
+      response.status(200);
+      response.send("Password updated");
+    }
+  } else {
+    response.status(400);
+    response.send("Invalid current password");
+  }
+  console.log(username, oldPassword, newPassword);
+  console.log(userData);
+});
+
+module.exports = app;
+
+##############################
 POST http://localhost:3000/register
 Content-Type: application/json
 
